@@ -1,0 +1,26 @@
+# .env Dateien, da diese private Schlüssel enthalten
+*/.env
+
+# Lokale Immich Postgre-Datenbank
+/immich/immich-db
+
+# Nginx Ressourcen
+/nginx/data
+/nginx/letsencrypt
+
+# Minecraft Ressourcen
+/minecraft/data
+
+# Paperless-Ngx
+/paperless-ngx/consume
+/paperless-ngx/export
+/paperless-ngx/scan
+
+# Glance
+/glance/config/home.yml
+
+# Tailscale
+/tailscale
+
+# Outline, still in testing
+/outline

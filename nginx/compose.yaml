@@ -1,0 +1,28 @@
+services:
+  app:
+    container_name: nginx-proxy-manager
+    labels:
+      glance.name: Nginx Proxy Manager
+      glance.icon: di:nginx-proxy-manager
+      glance.url: https://nginx.felix0351.duckdns.org
+      glance.description: Reverse Proxy
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      # Öffne alle benötigten Ports für den Webzugriff.
+      # These ports are in format <host-port>:<container-port>
+      - 80:80 # Public HTTP Port
+      - 443:443 # Public HTTPS Port
+      - 81:81 # Admin Web Port 
+      # Add any other Stream port you want to expose
+      # - '21:21' # FTP
+      # Uncomment this if IPv6 is not enabled on your host
+      # DISABLE_IPV6: 'true'
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+
+# Eigenes Netzwerk, um mit den anderen Containern kommunizieren zu können.
+networks:
+  default:
+    name: reverse-proxy

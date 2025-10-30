@@ -1,0 +1,144 @@
+# Docker Compose file for running paperless from the Docker Hub.
+# This file contains everything paperless needs to run.
+# Paperless supports amd64, arm and arm64 hardware.
+#
+# All compose files of paperless configure paperless in the following way:
+#
+# - Paperless is (re)started on system boot, if it was running before shutdown.
+# - Docker volumes for storing data are managed by Docker.
+# - Folders for importing and exporting files are created in the same directory
+#   as this file and mounted to the correct folders inside the container.
+# - Paperless listens on port 8000.
+#
+# In addition to that, this Docker Compose file adds the following optional
+# configurations:
+#
+# - Instead of SQLite (default), PostgreSQL is used as the database server.
+#
+# To install and update paperless with this file, do the following:
+#
+# - Copy this file as 'docker-compose.yml' and the files 'docker-compose.env'
+#   and '.env' into a folder.
+# - Run 'docker compose pull'.
+# - Run 'docker compose up -d'.
+#
+# For more extensive installation and update instructions, refer to the
+# documentation.
+services:
+  broker:
+    container_name: paperless_broker
+    labels:
+      glance.name: Paperless-NGX
+      glance.icon: di:paperless
+      glance.url: https://paperless.felix0351.duckdns.org
+      glance.description: Document storage
+      glance.id: paperless
+    image: docker.io/library/redis:8
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    networks:
+      - internal
+  db:
+    container_name: paperless_db
+    labels:
+      glance.parent: paperless
+      glance.name: DB
+    image: docker.io/library/postgres:17
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+    networks:
+      - internal
+  webserver:
+    container_name: paperless_server
+    labels:
+      glance.parent: paperless
+      glance.name: Webserver
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+    networks:
+      - internal
+      - reverse-proxy
+    #ports:
+    #  - "8000:8000"
+    volumes:
+      - data:/usr/src/paperless/data
+      - media:/usr/src/paperless/media:nocopy
+      - ./export:/usr/src/paperless/export
+      - ./consume:/usr/src/paperless/consume
+    env_file:
+      - docker-compose.env
+      - .env
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+  # HP-Scan einrichten 
+  # https://github.com/manuc66/node-hp-scan-to
+  node-hp-scan-to:
+    container_name: paperless_hp
+    labels:
+      glance.parent: paperless
+      glance.name: Scan service
+    image: docker.io/manuc66/node-hp-scan-to:latest
+    restart: unless-stopped
+    hostname: node-hp-scan-to
+    environment:
+      # REQUIRED - Change the next line to the IP address of your HP printer/scanner:
+      - IP=192.168.178.53
+      # Name that your container will appear as to your printer:
+      - LABEL=Paperless-Ngx
+      # Set the timezone, such as "Europe/London":
+      - TZ=Europe/Berlin
+      # Set the created filename pattern:
+      - PATTERN="scan"_dd-mm-yyyy_hh-MM-ss
+      # Run the Docker container as the same user ID as the host system:
+      - PGID=1000
+      - PUID=1000
+      # Optional - enable autoscanning a document when loaded into the scanner:
+      # - MAIN_COMMAND=adf-autoscan
+      # If you need to pass additional configuration flag use the CMDLINE env, thy will be appened to the
+      # - CMDLINE=--debug --pdf
+      # If using Paperless-ngx, you can use its API to upload files:
+      - PAPERLESS_POST_DOCUMENT_URL=http://paperless-server:8000/api/documents/post_document/
+      - PAPERLESS_TOKEN=e61c658d5b209b7f3adcfcd5354f32715e2bf15f
+    volumes:
+      - ./scan:/scan
+    networks:
+      - internal
+
+
+
+# https://docs.paperless-ngx.com/administration/
+volumes:
+  # Speicherort von 'Hilfsdaten'.
+  # Paperless-Ngx beschreibt es so: This is where auxiliary data is stored
+  # Hier wird ansonsten auch die SQL-Lite Datenbank gespeichert, jedoch nutzt dieser Stack PostgreSQL
+  data:
+  # Speicherort der Dokumente. Diese werden auf einem TrueNas gespeichert.
+  media:
+    driver: local
+    driver_opts:
+      device: ":/mnt/pool/nfs/docker-volumes/paperlessngx"
+      type: "nfs"
+      o: "addr=192.168.178.135,rw,noatime,rsize=8192,wsize=8192,tcp,timeo=14,nfsvers=4"
+  # Speicherort der Datenbank. 
+  # Lasse ich aus Performance-Gründen auf der SSD
+  # Jedoch wird ein Backup-Task die Datenbank täglich dumpen, ähnlich wie bei Immich
+  pgdata:
+  # Redis Dateien
+  # Wüsste kein Grund diese Dateien zu sichern
+  redisdata:
+
+# Nutze den eigenen Nginx Reverse-Proxy
+networks:
+  internal:
+  reverse-proxy:
+    external: true

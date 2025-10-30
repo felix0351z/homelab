@@ -1,0 +1,115 @@
+#
+# WARNING: To install Immich, follow our guide: https://immich.app/docs/install/docker-compose
+#
+# Make sure to use the docker-compose.yml of the current release:
+#
+# https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml
+#
+# The compose file on main may not be compatible with the latest release.
+
+name: immich
+
+services:
+  immich-server:
+    container_name: immich_server
+    labels:
+      glance.name: Immich
+      glance.icon: di:immich
+      glance.url: https://immich.felix0351.duckdns.org
+      glance.description: Image & video management
+      glance.id: immich
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release} # Take the current version
+    volumes:
+      # Do not edit the next line. If you want to change the media storage location on your system, edit the value of UPLOAD_LOCATION in the .env file
+      # Die Einstellung no-copy wird benötigt, da Docker beim Start versurcht Dateien vom Imgage in das Volume mit einem anderen Benutzer als USER_ID zu kopieren.
+      # Das Kopieren ist jedoch nur beim ersten Start erforderlich, danach nicht mehr. Da mein TrueNas keine Änderungen mit einer anderen UID zulässt, muss das no-copy Flag gesetzt werden. So überspring Docker diesen Schritt.
+      - ${UPLOAD_LOCATION}:/usr/src/app/upload:no-copy
+      - /etc/localtime:/etc/localtime:ro
+    # Passender TrueNas Benutzer. Ansonsten verweigert mein TrueNas jegliche Schreib/Lesebefehle.
+    user: ${USER_ID}:${GROUP_ID}
+    env_file:
+      - .env
+    # Da ich ein Reverse-Proxy nutze fällt die Port-Einstellung weg.
+    # ports:
+    #   - '2283:2283'
+    networks:
+      # Verbinde Immich mit den unten konfigurierten Netzwerken. 
+      - immich-internal
+      - reverse-proxy
+      - tailscale-network
+    depends_on:
+      # Immich darf erst nach der Erstellung von Redis und Postgre gestartet werden.
+      - redis
+      - database
+    restart: unless-stopped
+    healthcheck:
+      disable: false
+
+  immich-machine-learning:
+    container_name: immich_machine_learning
+    labels:
+      glance.parent: immich
+      glance.name: Machine-Learning
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release} # Take the current version
+    volumes:
+      - model-cache:/cache
+    env_file:
+      - .env
+    networks:
+      - immich-internal
+    restart: unless-stopped
+    healthcheck:
+      disable: false
+
+  redis:
+    container_name: immich_redis
+    labels:
+      glance.parent: immich
+      glance.name: Redis
+    image: docker.io/valkey/valkey:8-bookworm@sha256:42cba146593a5ea9a622002c1b7cba5da7be248650cbb64ecb9c6c33d29794b1
+    healthcheck:
+      test: redis-cli ping || exit 1
+    networks:
+      - immich-internal
+    restart: unless-stopped
+
+  database:
+    container_name: immich_postgres
+    labels:
+      glance.parent: immich
+      glance.name: DB
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    volumes:
+      # Do not edit the next line. If you want to change the database storage location on your system, edit the value of DB_DATA_LOCATION in the .env file
+      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+    networks:
+      - immich-internal
+    shm_size: 128mb
+    restart: unless-stopped
+
+volumes:
+  # Cache für Immichs Machine-Learning Container
+  model-cache:
+  # Speichere alle Daten via NFS-Volume auf meinem TrueNas
+  immich-uploads:
+    driver: local
+    driver_opts:
+      device: ":/mnt/pool/nfs/docker-volumes/immich"
+      type: "nfs"
+      o: "addr=192.168.178.135,rw,noatime,rsize=8192,wsize=8192,tcp,timeo=14,nfsvers=4"
+
+
+networks:
+  # Immichs Anbindung an Redis, Postrgre und den Machine-Learning Container
+  immich-internal:
+  # Zugriff auf Immich über den Reverse-Proxy
+  reverse-proxy:
+    external: true
+  # Weiteren Zugriff auch über Tailscale möglich
+  tailscale-network:
+    external: true

@@ -118,26 +118,25 @@ services:
 
 # https://docs.paperless-ngx.com/administration/
 volumes:
-  # Speicherort von 'Hilfsdaten'.
-  # Paperless-Ngx beschreibt es so: This is where auxiliary data is stored
-  # Hier wird ansonsten auch die SQL-Lite Datenbank gespeichert, jedoch nutzt dieser Stack PostgreSQL
+  # Data volume
+  # This is where auxiliary data is stored
   data:
-  # Speicherort der Dokumente. Diese werden auf einem TrueNas gespeichert.
+  # Document storage
+  # Save this on my TrueNas
   media:
     driver: local
     driver_opts:
       device: ":/mnt/pool/nfs/docker-volumes/paperlessngx"
       type: "nfs"
       o: "addr=192.168.178.135,rw,noatime,rsize=8192,wsize=8192,tcp,timeo=14,nfsvers=4"
-  # Speicherort der Datenbank. 
-  # Lasse ich aus Performance-Gründen auf der SSD
-  # Jedoch wird ein Backup-Task die Datenbank täglich dumpen, ähnlich wie bei Immich
+  # Database volume. 
+  # On the ssd due to performance reasons
+  # TODO: Backup task to dump the database automatically
   pgdata:
-  # Redis Dateien
-  # Wüsste kein Grund diese Dateien zu sichern
+  # Redis volume
   redisdata:
 
-# Nutze den eigenen Nginx Reverse-Proxy
+# Use my reverse proxy
 networks:
   internal:
   reverse-proxy:

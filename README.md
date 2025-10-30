@@ -1,7 +1,5 @@
 With this repo, I would like to show you how I set up my home lab and what I use it for.
 
-![PXL_20251030_084953129](https://github.com/user-attachments/assets/ee43b9b4-975d-434c-b56c-3234aac66a65)
-
 ## Mini ITX-Build
 To run my homelab, I decided to build myself a small Mini-ITX system that is capable of running a NAS and several other services without overloading the power grid. 
 

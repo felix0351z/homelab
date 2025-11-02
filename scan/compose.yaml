@@ -1,0 +1,31 @@
+services:
+  hp-scan:
+    container_name: hp_scan
+    labels:
+      glance.name: HP Scan Service
+      glance.icon: di:hp
+      glance.description: Scan documents
+    image: docker.io/manuc66/node-hp-scan-to:latest
+    restart: unless-stopped
+    hostname: node-hp-scan-to
+    environment:
+      # REQUIRED - Change the next line to the IP address of your HP printer/scanner:
+      - IP=${PRINTER_IP}
+      # Name that your container will appear as to your printer:
+      - LABEL=Samba
+      - TZ=Europe/Berlin
+      # Set the created filename pattern:
+      - PATTERN="scan"_dd-mm-yyyy_hh-MM-ss
+      # Run the Docker container as the same user ID as specified in the volume configuration:
+      - PGID=1000
+      - PUID=1000
+    volumes:
+      - samba-scan:/scan
+
+volumes:
+  samba-scan:
+    driver: local
+    driver_opts:
+      type: cifs 
+      o: username=${SAMBA_USER},password=${SAMBA_PASSWORD},uid=1000,gid=1000,vers=3.0
+      device: //${SAMBA_IP}/Share

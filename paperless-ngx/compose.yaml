@@ -1,30 +1,9 @@
 # Docker Compose file for running paperless from the Docker Hub.
 # This file contains everything paperless needs to run.
 # Paperless supports amd64, arm and arm64 hardware.
-#
-# All compose files of paperless configure paperless in the following way:
-#
-# - Paperless is (re)started on system boot, if it was running before shutdown.
-# - Docker volumes for storing data are managed by Docker.
-# - Folders for importing and exporting files are created in the same directory
-#   as this file and mounted to the correct folders inside the container.
-# - Paperless listens on port 8000.
-#
-# In addition to that, this Docker Compose file adds the following optional
-# configurations:
-#
-# - Instead of SQLite (default), PostgreSQL is used as the database server.
-#
-# To install and update paperless with this file, do the following:
-#
-# - Copy this file as 'docker-compose.yml' and the files 'docker-compose.env'
-#   and '.env' into a folder.
-# - Run 'docker compose pull'.
-# - Run 'docker compose up -d'.
-#
-# For more extensive installation and update instructions, refer to the
-# documentation.
+
 services:
+  # Redis broker
   broker:
     container_name: paperless_broker
     labels:
@@ -39,7 +18,9 @@ services:
       - redisdata:/data
     networks:
       - internal
-  db:
+
+  # Postgres Database
+  db: 
     container_name: paperless_db
     labels:
       glance.parent: paperless
@@ -48,12 +29,42 @@ services:
     restart: unless-stopped
     volumes:
       - pgdata:/var/lib/postgresql/data
+    #  - pgdumps:/backups
     environment:
       POSTGRES_DB: paperless
       POSTGRES_USER: paperless
       POSTGRES_PASSWORD: paperless
     networks:
       - internal
+
+  # Postgres Backup service
+  # Dumps the database every 24 hours.
+  pgbackups:
+    container_name: paperless_pgbackup
+    labels:
+      glance.parent: paperless
+      glance.name: Postgres-Dumps
+    image: docker.io/library/postgres:17
+    depends_on:
+      - db
+    environment:
+      PGUSER: paperless
+      PGPASSWORD: paperless
+      PGHOST: db
+      PGDATABASE: paperless
+    volumes:
+      - pgdumps:/backups
+    entrypoint: >
+      bash -c 'while true;
+      do
+        pg_dump -Fc paperless > /backups/paperless_$(date +%Y-%m-%d_%H-%M-%S).dump;
+        find /backups -type f -mtime +14 -delete;
+        sleep 86400;
+      done'
+    networks:
+      - internal
+    
+  # Paperless-Ngx main server
   webserver:
     container_name: paperless_server
     labels:
@@ -67,8 +78,6 @@ services:
     networks:
       - internal
       - reverse-proxy
-    #ports:
-    #  - "8000:8000"
     volumes:
       - data:/usr/src/paperless/data
       - media:/usr/src/paperless/media:nocopy
@@ -80,7 +89,8 @@ services:
     environment:
       PAPERLESS_REDIS: redis://broker:6379
       PAPERLESS_DBHOST: db
-  # HP-Scan einrichten 
+
+  # HP-Scan Service 
   # https://github.com/manuc66/node-hp-scan-to
   node-hp-scan-to:
     container_name: paperless_hp
@@ -118,22 +128,30 @@ services:
 
 # https://docs.paperless-ngx.com/administration/
 volumes:
-  # Data volume
-  # This is where auxiliary data is stored
+  # Auxiliary data volume
+  # OCR-Cache, Logs, Task-queues, some Thumbnails and other stuff. 
+  # No backup needed.
   data:
   # Document storage
-  # Save this on my TrueNas
+  # Saved on my TrueNas
   media:
     driver: local
     driver_opts:
-      device: ":/mnt/pool/nfs/docker-volumes/paperlessngx"
+      device: ":/mnt/pool/nfs/docker-volumes/paperlessngx/media"
       type: "nfs"
       o: "addr=192.168.178.135,rw,noatime,rsize=8192,wsize=8192,tcp,timeo=14,nfsvers=4"
   # Database volume. 
   # On the ssd due to performance reasons
-  # TODO: Backup task to dump the database automatically
   pgdata:
-  # Redis volume
+  # Databse dumps
+  # Saved on my TrueNas
+  pgdumps:
+    driver: local
+    driver_opts:
+      device: ":/mnt/pool/nfs/docker-volumes/paperlessngx/pgdumps"
+      type: "nfs"
+      o: "addr=192.168.178.135,rw,noatime,rsize=8192,wsize=8192,tcp,timeo=14,nfsvers=4"
+  # Redis Cache volume
   redisdata:
 
 # Use my reverse proxy

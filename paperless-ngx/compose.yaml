@@ -38,13 +38,13 @@ services:
       - internal
 
   # Postgres Backup service
-  # Dumps the database every 24 hours.
   pgbackups:
     container_name: paperless_pgbackup
     labels:
       glance.parent: paperless
       glance.name: Postgres-Dumps
-    image: docker.io/library/postgres:17
+    build: ./backup
+    restart: unless-stopped
     depends_on:
       - db
     environment:
@@ -54,16 +54,10 @@ services:
       PGDATABASE: paperless
     volumes:
       - pgdumps:/backups
-    entrypoint: >
-      bash -c 'while true;
-      do
-        pg_dump -Fc paperless > /backups/paperless_$(date +%Y-%m-%d_%H-%M-%S).dump;
-        find /backups -type f -mtime +14 -delete;
-        sleep 86400;
-      done'
+      - /etc/localtime:/etc/localtime:ro # Take the timezone of the host
     networks:
       - internal
-    
+
   # Paperless-Ngx main server
   webserver:
     container_name: paperless_server
@@ -81,8 +75,8 @@ services:
     volumes:
       - data:/usr/src/paperless/data
       - media:/usr/src/paperless/media:nocopy
-      - ./export:/usr/src/paperless/export
-      - ./consume:/usr/src/paperless/consume
+      - ./data/export:/usr/src/paperless/export
+      - ./data/consume:/usr/src/paperless/consume
     env_file:
       - docker-compose.env
       - .env
@@ -91,7 +85,6 @@ services:
       PAPERLESS_DBHOST: db
 
   # HP-Scan Service 
-  # https://github.com/manuc66/node-hp-scan-to
   node-hp-scan-to:
     container_name: paperless_hp
     labels:
@@ -101,26 +94,16 @@ services:
     restart: unless-stopped
     hostname: node-hp-scan-to
     environment:
-      # REQUIRED - Change the next line to the IP address of your HP printer/scanner:
       - IP=192.168.178.53
-      # Name that your container will appear as to your printer:
       - LABEL=Paperless-Ngx
-      # Set the timezone, such as "Europe/London":
       - TZ=Europe/Berlin
-      # Set the created filename pattern:
       - PATTERN="scan"_dd-mm-yyyy_hh-MM-ss
-      # Run the Docker container as the same user ID as the host system:
       - PGID=1000
       - PUID=1000
-      # Optional - enable autoscanning a document when loaded into the scanner:
-      # - MAIN_COMMAND=adf-autoscan
-      # If you need to pass additional configuration flag use the CMDLINE env, thy will be appened to the
-      # - CMDLINE=--debug --pdf
-      # If using Paperless-ngx, you can use its API to upload files:
       - PAPERLESS_POST_DOCUMENT_URL=http://paperless-server:8000/api/documents/post_document/
       - PAPERLESS_TOKEN=e61c658d5b209b7f3adcfcd5354f32715e2bf15f
     volumes:
-      - ./scan:/scan
+      - ./data/scan:/scan
     networks:
       - internal
 

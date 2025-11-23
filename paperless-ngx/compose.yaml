@@ -100,7 +100,7 @@ services:
       - PATTERN="scan"_dd-mm-yyyy_hh-MM-ss
       - PGID=1000
       - PUID=1000
-      - PAPERLESS_POST_DOCUMENT_URL=http://paperless-server:8000/api/documents/post_document/
+      - PAPERLESS_POST_DOCUMENT_URL=http://webserver:8000/api/documents/post_document/
       - PAPERLESS_TOKEN=e61c658d5b209b7f3adcfcd5354f32715e2bf15f
     volumes:
       - ./data/scan:/scan

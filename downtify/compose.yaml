@@ -1,0 +1,17 @@
+services:
+  downtify:
+    container_name: downtify
+    labels:
+      glance.id: Downtify
+      glance.description: Youtube music downloader
+      glance.icon: di:spotify
+      glance.url: https://downtify.felix0351.duckdns.org
+    image: ghcr.io/henriquesebastiao/downtify:latest
+    networks:
+      - reverse-proxy
+    volumes:
+      - ./downloads:/downloads
+
+networks:
+  reverse-proxy:
+    external: true
